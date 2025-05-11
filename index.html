@@ -1,0 +1,347 @@
+<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enchanted Firefly Forest</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+       
+  frameRate(60); }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/p5@1.8.0/lib/p5.js"></script>
+
+<base target="_self">
+
+
+  </head><body><button id="fs-toggle">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor">
+      <path d="M1.5 1H6v1.5H3v3H1.5V1zM10 1h4.5v4.5H13v-3h-3V1zM1.5 10.5H3v3h3V15H1.5v-4.5zM13 13.5v-3h1.5V15H10v-1.5h3z"></path>
+    </svg>
+  </button>
+    <script>
+        const sketch = (p) => {
+            let fireflies = [];
+            let trees = [];
+            let fogParticles = [];
+            let canvas;
+            let maxFireflies = 150;
+            let fogDensity = 80;
+            let colorPalette = [
+                [50, 100, 150],
+                [80, 120, 180],
+                [120, 180, 220],
+                [180, 220, 255]
+            ];
+            let bgColor;
+            let interactionRadius = 150;
+            let lastMouseMove = 0;
+            let mouseStill = true;
+
+            p.setup = function() {
+                canvas = p.createCanvas(p.windowWidth, p.windowHeight);
+                bgColor = p.color(10, 15, 20);
+                p.background(bgColor);
+                p.noStroke();
+                p.colorMode(p.HSB, 360, 100, 100, 1.0);
+
+                // Initialize trees
+                createForest();
+
+                // Initialize fog particles
+                for (let i = 0; i < fogDensity; i++) {
+                    fogParticles.push(new FogParticle());
+                }
+
+                // Initialize fireflies
+                for (let i = 0; i < maxFireflies / 2; i++) {
+                    fireflies.push(new Firefly());
+                }
+            };
+
+            p.draw = function() {
+                // Dark background with slight fade for motion trails
+                p.fill(bgColor);
+                p.rect(0, 0, p.width, p.height);
+
+                // Draw fog
+                drawFog();
+
+                // Draw trees
+                drawTrees();
+
+                // Update and draw fireflies
+                updateFireflies();
+
+                // Add more fireflies if mouse is moving
+                if (!mouseStill && fireflies.length < maxFireflies && p.frameCount % 5 === 0) {
+                    fireflies.push(new Firefly());
+                }
+
+                // Check mouse movement status
+                if (p.millis() - lastMouseMove > 1000) {
+                    mouseStill = true;
+                }
+            };
+
+            function createForest() {
+                trees = [];
+                let treeCount = p.width / 20;
+                for (let i = 0; i < treeCount; i++) {
+                    trees.push({
+                        x: p.random(p.width),
+                        width: p.random(10, 30),
+                        height: p.random(p.height * 0.5, p.height * 0.9),
+                        hue: p.random(100, 140),
+                        saturation: p.random(30, 50),
+                        brightness: p.random(10, 20)
+                    });
+                }
+            }
+
+            function drawTrees() {
+                for (let tree of trees) {
+                    let baseBrightness = tree.brightness;
+                    // Add subtle pulsing effect
+                    let pulse = p.sin(p.frameCount * 0.01 + tree.x * 0.01) * 2;
+                    
+                    p.fill(tree.hue, tree.saturation, baseBrightness + pulse);
+                    p.rect(tree.x, p.height - tree.height, tree.width, tree.height);
+                    
+                    // Draw some branches
+                    for (let y = p.height - tree.height; y < p.height; y += tree.height / 5) {
+                        let branchLength = p.random(tree.width * 1.5, tree.width * 3);
+                        let direction = p.random() > 0.5 ? 1 : -1;
+                        
+                        p.fill(tree.hue, tree.saturation, baseBrightness + pulse - 5);
+                        p.rect(tree.x, y, branchLength * direction, 2);
+                    }
+                }
+            }
+
+            function drawFog() {
+                for (let particle of fogParticles) {
+                    particle.update();
+                    particle.display();
+                }
+            }
+
+            function updateFireflies() {
+                for (let i = fireflies.length - 1; i >= 0; i--) {
+                    fireflies[i].update();
+                    fireflies[i].display();
+                    
+                    // Remove fireflies that are too old (unless we're below minimum)
+                    if (fireflies.length > maxFireflies / 2 && fireflies[i].age > fireflies[i].lifespan) {
+                        fireflies.splice(i, 1);
+                    }
+                }
+            }
+
+            class Firefly {
+                constructor() {
+                    this.reset();
+                    this.lifespan = p.random(500, 1500);
+                    this.age = 0;
+                }
+
+                reset() {
+                    this.pos = p.createVector(
+                        p.random(p.width),
+                        p.random(p.height * 0.2, p.height * 0.8)
+                    );
+                    this.vel = p5.Vector.random2D().mult(p.random(0.2, 0.8));
+                    this.acc = p.createVector(0, 0);
+                    this.maxSpeed = p.random(1, 2);
+                    this.size = p.random(3, 8);
+                    this.hue = p.random(40, 70);
+                    this.saturation = p.random(70, 90);
+                    this.brightness = p.random(80, 100);
+                    this.baseBrightness = this.brightness;
+                    this.followFactor = p.random(0.01, 0.05);
+                    this.wanderStrength = p.random(0.1, 0.3);
+                    this.pulseSpeed = p.random(0.05, 0.1);
+                }
+
+                update() {
+                    this.age++;
+                    
+                    // Apply wandering behavior
+                    let wander = p5.Vector.random2D().mult(this.wanderStrength);
+                    this.acc.add(wander);
+                    
+                    // Follow mouse if moving and within range
+                    if (!mouseStill) {
+                        let mouseDist = p.dist(this.pos.x, this.pos.y, p.mouseX, p.mouseY);
+                        if (mouseDist < interactionRadius) {
+                            let followForce = p5.Vector.sub(p.createVector(p.mouseX, p.mouseY), this.pos);
+                            followForce.normalize().mult(this.followFactor);
+                            this.acc.add(followForce);
+                            
+                            // Brighten when near mouse
+                            this.brightness = p.lerp(this.brightness, 100, 0.1);
+                        } else {
+                            this.brightness = p.lerp(this.brightness, this.baseBrightness, 0.05);
+                        }
+                    }
+                    
+                    // Apply pulsing effect
+                    this.size = this.size * (0.9 + 0.2 * p.sin(this.age * this.pulseSpeed));
+                    
+                    // Update physics
+                    this.vel.add(this.acc);
+                    this.vel.limit(this.maxSpeed);
+                    this.pos.add(this.vel);
+                    this.acc.mult(0);
+                    
+                    // Boundary check
+                    if (this.pos.x < 0 || this.pos.x > p.width || this.pos.y < 0 || this.pos.y > p.height) {
+                        this.reset();
+                    }
+                }
+
+                display() {
+                    // Glow effect
+                    let glowSize = this.size * 3;
+                    p.fill(this.hue, this.saturation, this.brightness, 0.3);
+                    p.ellipse(this.pos.x, this.pos.y, glowSize, glowSize);
+                    
+                    // Core light
+                    p.fill(this.hue, this.saturation, this.brightness);
+                    p.ellipse(this.pos.x, this.pos.y, this.size, this.size);
+                }
+            }
+
+            class FogParticle {
+                constructor() {
+                    this.reset();
+                }
+
+                reset() {
+                    this.pos = p.createVector(
+                        p.random(p.width),
+                        p.random(p.height)
+                    );
+                    this.size = p.random(50, 200);
+                    this.speed = p.random(0.1, 0.5);
+                    this.alpha = p.random(0.01, 0.05);
+                    this.hue = p.random(200, 220);
+                    this.saturation = p.random(5, 15);
+                    this.brightness = p.random(20, 40);
+                }
+
+                update() {
+                    this.pos.y -= this.speed;
+                    if (this.pos.y < -this.size) {
+                        this.reset();
+                        this.pos.y = p.height + this.size;
+                    }
+                }
+
+                display() {
+                    p.fill(this.hue, this.saturation, this.brightness, this.alpha);
+                    p.ellipse(this.pos.x, this.pos.y, this.size, this.size);
+                }
+            }
+
+            p.mouseMoved = function() {
+                lastMouseMove = p.millis();
+                mouseStill = false;
+                
+                // Create a gentle wind effect when mouse moves
+                for (let firefly of fireflies) {
+                    let mouseDist = p.dist(firefly.pos.x, firefly.pos.y, p.mouseX, p.mouseY);
+                    if (mouseDist < interactionRadius * 2) {
+                        let windForce = p.createVector(p.mouseX - p.pmouseX, p.mouseY - p.pmouseY);
+                        windForce.normalize().mult(0.1);
+                        firefly.acc.add(windForce);
+                    }
+                }
+            };
+
+            p.mouseClicked = function() {
+                // Create a burst of new fireflies at click location
+                let burstCount = 10;
+                for (let i = 0; i < burstCount && fireflies.length < maxFireflies; i++) {
+                    let f = new Firefly();
+                    f.pos = p.createVector(p.mouseX, p.mouseY);
+                    f.vel = p5.Vector.random2D().mult(p.random(1, 3));
+                    f.size = p.random(5, 10);
+                    f.brightness = 100;
+                    fireflies.push(f);
+                }
+            };
+
+            p.windowResized = function() {
+                p.resizeCanvas(p.windowWidth, p.windowHeight);
+                createForest();
+                
+                // Adjust fog density based on screen size
+                fogDensity = (p.width * p.height) / 5000;
+                while (fogParticles.length < fogDensity) {
+                    fogParticles.push(new FogParticle());
+                }
+                while (fogParticles.length > fogDensity) {
+                    fogParticles.pop();
+                }
+            };
+        };
+
+        new p5(sketch);
+    
+  // Touch event handlers for mobile compatibility
+  p.touchMoved = function() {
+    // Forward touch events to mouse events
+    if (typeof p.mouseMoved === 'function') {
+      p.mouseMoved();
+    }
+    return false; // Prevent default
+  };
+  
+  p.touchStarted = function() {
+    // Forward to mousePressed
+    if (typeof p.mousePressed === 'function') {
+      p.mousePressed();
+    }
+    return false; // Prevent default
+  };
+  
+  p.touchEnded = function() {
+    // Forward to mouseReleased
+    if (typeof p.mouseReleased === 'function') {
+      p.mouseReleased();
+    }
+    return false; // Prevent default
+  };
+  // Fullscreen toggle
+  document.getElementById('fs-toggle').addEventListener('click', function() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(err => {
+        console.log('Fullscreen request failed: ', err);
+      });
+    } else {
+      if (document.exitFullscreen) {
+        document.exitFullscreen();
+      }
+    }
+  });
+  
+  // Hide fullscreen button after inactivity
+  const fsButton = document.getElementById('fs-toggle');
+  let timeout;
+  document.addEventListener('mousemove', function() {
+    fsButton.style.opacity = '0.3';
+    clearTimeout(timeout);
+    timeout = setTimeout(() => {
+      fsButton.style.opacity = '0';
+    }, 2000);
+  });
+  </script>
+
+              
+          
+                
+          
+              
+</body></html>
